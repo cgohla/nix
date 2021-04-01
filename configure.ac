@@ -190,6 +190,9 @@ PKG_CHECK_MODULES([SQLITE3], [sqlite3 >= 3.6.19], [CXXFLAGS="$SQLITE3_CFLAGS $CX
 # Look for libcurl, a required dependency.
 PKG_CHECK_MODULES([LIBCURL], [libcurl], [CXXFLAGS="$LIBCURL_CFLAGS $CXXFLAGS"])
 
+# Look for histedit, native line editing library on OpenBSD
+# TODO the library is actually called editline as well. need to defined the cflags
+AC_CHECK_HEADERS([histedit.h], [], [
 # Look for editline, a required dependency.
 # The the libeditline.pc file was added only in libeditline >= 1.15.2,
 # see https://github.com/troglobit/editline/commit/0a8f2ef4203c3a4a4726b9dd1336869cd0da8607,
@@ -201,6 +204,8 @@ PKG_CHECK_MODULES([EDITLINE], [libeditline], [CXXFLAGS="$EDITLINE_CFLAGS $CXXFLA
   AC_SEARCH_LIBS([readline read_history], [editline], [],
     [AC_MSG_ERROR([Nix requires libeditline; it was not found via pkg-config, but via its header, but required functions do not work. Maybe it is too old? >= 1.14 is required.])])
 ])
+]) # end histedit test
+
 
 # Look for libsodium, an optional dependency.
 PKG_CHECK_MODULES([SODIUM], [libsodium], [CXXFLAGS="$SODIUM_CFLAGS $CXXFLAGS"])
@@ -219,12 +224,13 @@ LDFLAGS="-lz $LDFLAGS"
 PKG_CHECK_MODULES([LIBBROTLI], [libbrotlienc libbrotlidec], [CXXFLAGS="$LIBBROTLI_CFLAGS $CXXFLAGS"])
 
 # Look for libcpuid.
-if test "$machine_name" = "x86_64"; then
-  PKG_CHECK_MODULES([LIBCPUID], [libcpuid], [CXXFLAGS="$LIBCPUID_CFLAGS $CXXFLAGS"])
-  have_libcpuid=1
-  AC_DEFINE([HAVE_LIBCPUID], [1], [Use libcpuid])
-fi
-AC_SUBST(HAVE_LIBCPUID, [$have_libcpuid])
+dnl # TODO probably port this lib later
+dnl if test "$machine_name" = "x86_64"; then
+dnl   PKG_CHECK_MODULES([LIBCPUID], [libcpuid], [CXXFLAGS="$LIBCPUID_CFLAGS $CXXFLAGS"])
+dnl   have_libcpuid=1
+dnl   AC_DEFINE([HAVE_LIBCPUID], [1], [Use libcpuid])
+dnl fi
+dnl AC_SUBST(HAVE_LIBCPUID, [$have_libcpuid])
 
 
 # Look for libseccomp, required for Linux sandboxing.
@@ -273,10 +279,12 @@ if test "$gc" = yes; then
   AC_DEFINE(HAVE_BOEHMGC, 1, [Whether to use the Boehm garbage collector.])
 fi
 
-
 # Look for gtest.
-PKG_CHECK_MODULES([GTEST], [gtest_main])
-
+dnl # TODO we apparently have this lib, but no pkg-config for it.
+dnl # we need a proper test here. or make this optional
+dnl PKG_CHECK_MODULES([GTEST], [gtest_main], [true], [
+dnl   AC_SEARCH_LIBS([gtest_main], [editline], [true])
+dnl ])
 
 # documentation generation switch
 AC_ARG_ENABLE(doc-gen, AC_HELP_STRING([--disable-doc-gen],
