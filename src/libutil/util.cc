@@ -26,6 +26,10 @@
 #include <sys/un.h>
 #include <unistd.h>
 
+#ifdef __OpenBSD__
+#include <sys/stat.h>
+#endif
+
 #ifdef __APPLE__
 #include <sys/syscall.h>
 #endif
@@ -605,7 +609,13 @@ void createSymlink(const Path & target, const Path & link,
         times[0].tv_usec = 0;
         times[1].tv_sec = *mtime;
         times[1].tv_usec = 0;
+#ifdef __OpenBSD__
+        struct timespec timesS[2];
+        TIMEVAL_TO_TIMESPEC(times, timesS);
+        if (utimensat(AT_FDCWD, link.c_str(), timesS, AT_SYMLINK_NOFOLLOW))
+#else
         if (lutimes(link.c_str(), times))
+#endif
             throw SysError("setting time of symlink '%s'", link);
     }
 }
