@@ -27,7 +27,7 @@
 #include <grp.h>
 #include <fcntl.h>
 
-#if __APPLE__ || __FreeBSD__
+#if __APPLE__ || __FreeBSD__ || __OpenBSD__
 #include <sys/ucred.h>
 #endif
 
@@ -114,8 +114,11 @@ static PeerInfo getPeerInfo(int remote)
     PeerInfo peer = { false, 0, false, 0, false, 0 };
 
 #if defined(SO_PEERCRED)
-
+#ifdef __OpenBSD__
+    sockpeercred cred;
+#else
     ucred cred;
+#endif
     socklen_t credLen = sizeof(cred);
     if (getsockopt(remote, SOL_SOCKET, SO_PEERCRED, &cred, &credLen) == -1)
         throw SysError("getting peer credentials");
