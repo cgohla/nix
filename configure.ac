@@ -142,6 +142,11 @@ AX_BOOST_BASE([1.66], [CXXFLAGS="$BOOST_CPPFLAGS $CXXFLAGS"], [AC_MSG_ERROR([Nix
 # ends up with LDFLAGS being empty, so we set it afterwards.
 LDFLAGS="$BOOST_LDFLAGS $LDFLAGS"
 
+# This is required so we can tell configure to use the -mt variant of
+# boost_context. Unfortunately this test seems to be outdated and
+# fails, but configure proceeds anyway.
+AX_BOOST_CONTEXT
+
 # On some platforms, new-style atomics need a helper library
 AC_MSG_CHECKING(whether -latomic is needed)
 AC_LINK_IFELSE([AC_LANG_SOURCE([[
