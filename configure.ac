@@ -145,7 +145,17 @@ LDFLAGS="$BOOST_LDFLAGS $LDFLAGS"
 # This is required so we can tell configure to use the -mt variant of
 # boost_context. Unfortunately this test seems to be outdated and
 # fails, but configure proceeds anyway.
-AX_BOOST_CONTEXT
+# TODO actually use the configure option to link the library
+# AX_BOOST_CONTEXT # should we use this???
+
+# Perhaps this works better
+AC_ARG_VAR([WITH_BOOST_CONTEXT],[Variant for the Boost Context library.])
+[ if test -n $WITH_BOOST_CONTEXT ; then ]
+    AC_SUBST([BOOST_CONTEXT_LDFLAG],[$WITH_BOOST_CONTEXT])
+  else
+    AC_SUBST([BOOST_CONTEXT_LDFLAG],[-lboost_context])
+  fi
+
 
 # On some platforms, new-style atomics need a helper library
 AC_MSG_CHECKING(whether -latomic is needed)
