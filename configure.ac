@@ -356,6 +356,8 @@ AC_ARG_WITH(sandbox-shell, AC_HELP_STRING([--with-sandbox-shell=PATH],
   sandbox_shell=$withval)
 AC_SUBST(sandbox_shell)
 
+AC_CHECK_HEADERS([sys/wait.h])
+
 # Expand all variables in config.status.
 test "$prefix" = NONE && prefix=$ac_default_prefix
 test "$exec_prefix" = NONE && exec_prefix='${prefix}'
