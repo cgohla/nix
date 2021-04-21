@@ -360,6 +360,8 @@ AC_SUBST(sandbox_shell)
 
 AC_CHECK_HEADERS([sys/wait.h])
 
+PKG_CHECK_MODULES([LIBLOWDOWN], [lowdown >= 0.8.3], [CXXFLAGS="$LIBLOWDOWN_CFLAGS $CXXFLAGS"])
+
 # Expand all variables in config.status.
 test "$prefix" = NONE && prefix=$ac_default_prefix
 test "$exec_prefix" = NONE && exec_prefix='${prefix}'
