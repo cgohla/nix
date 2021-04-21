@@ -295,11 +295,13 @@ if test "$gc" = yes; then
 fi
 
 # Look for gtest.
-dnl # TODO we apparently have this lib, but no pkg-config for it.
-dnl # we need a proper test here. or make this optional
-dnl PKG_CHECK_MODULES([GTEST], [gtest_main], [true], [
-dnl   AC_SEARCH_LIBS([gtest_main], [editline], [true])
-dnl ])
+if test $(uname -s) = OpenBSD ; then
+  dnl AC_CHECK_HEADERS([gtest.h], [
+    AC_SUBST([GTEST_LIBS], [$GTEST_LDFLAGS])
+  dnl ])
+else
+  PKG_CHECK_MODULES([GTEST], [gtest_main])
+fi
 
 # documentation generation switch
 AC_ARG_ENABLE(doc-gen, AC_HELP_STRING([--disable-doc-gen],
