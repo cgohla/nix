@@ -17,7 +17,9 @@ libexpr_LIBS = libutil libstore libfetchers
 
 libexpr_LDFLAGS = $(BOOST_CONTEXT_LDFLAG)
 ifneq ($(OS), FreeBSD)
+ifneq ($(OS), OpenBSD)
  libexpr_LDFLAGS += -ldl
+endif
 endif
 
 # The dependency on libgc must be propagated (i.e. meaning that
