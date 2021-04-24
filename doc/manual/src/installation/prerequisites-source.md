@@ -72,3 +72,4 @@
  
   - Niels Lohmann's [JSON library](https://github.com/nlohmann/json).
   
+  - MDBook from <https://github.com/rust-lang/mdBook>
