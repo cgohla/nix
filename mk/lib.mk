@@ -60,7 +60,9 @@ ifeq ($(BUILD_SHARED_LIBS), 1)
   ifneq ($(OS), Darwin)
    ifneq ($(OS), SunOS)
     ifneq ($(OS), FreeBSD)
-     GLOBAL_LDFLAGS += -Wl,--no-copy-dt-needed-entries
+     ifneq ($(OS), OpenBSD)
+      GLOBAL_LDFLAGS += -Wl,--no-copy-dt-needed-entries
+     endif
     endif
    endif
   endif

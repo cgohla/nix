@@ -5,9 +5,8 @@
 
 #include <setjmp.h>
 
-#ifdef READLINE
-#include <readline/history.h>
-#include <readline/readline.h>
+#ifdef HAVE_HISTEDIT_H
+#include <histedit.h>
 #else
 // editline < 1.15.2 don't wrap their API for C++ usage
 // (added in https://github.com/troglobit/editline/commit/91398ceb3427b730995357e9d120539fb9bb7461).
@@ -38,6 +37,8 @@ extern "C" {
 #define GC_INCLUDE_NEW
 #include <gc/gc_cpp.h>
 #endif
+
+#define REPL_NAME "nix-repl"
 
 namespace nix {
 
@@ -78,6 +79,14 @@ struct NixRepl
     typedef set<Value *> ValuesSeen;
     std::ostream &  printValue(std::ostream & str, Value & v, unsigned int maxDepth);
     std::ostream &  printValue(std::ostream & str, Value & v, unsigned int maxDepth, ValuesSeen & seen);
+
+#ifdef HAVE_HISTEDIT_H
+    char *histeditPrompt(EditLine *editline);
+    History *hist;
+    EditLine *editline;
+    HistEvent event;
+    char *promptValue;
+#endif
 };
 
 
@@ -95,13 +104,23 @@ NixRepl::NixRepl(const Strings & searchPath, nix::ref<Store> store)
     , staticEnv(false, &state->staticBaseEnv)
     , historyFile(getDataDir() + "/nix/repl-history")
 {
+#ifdef HAVE_HISTEDIT_H
+  el_init(REPL_NAME, stdin, stdout, stderr);
+  history(hist, &event, H_SETSIZE, 100);
+#endif
     curDir = absPath(".");
 }
 
 
 NixRepl::~NixRepl()
 {
+#ifdef HAVE_HISTEDIT_H
+    history(hist, &event, H_SAVE, historyFile.c_str());
+    history_end(hist);
+    el_end(editline);
+#else
     write_history(historyFile.c_str());
+#endif
 }
 
 static NixRepl * curRepl; // ugly
@@ -189,16 +208,27 @@ void NixRepl::mainLoop(const std::vector<std::string> & files)
     if (!loadedFiles.empty()) std::cout << std::endl;
 
     // Allow nix-repl specific settings in .inputrc
-    rl_readline_name = "nix-repl";
+#ifdef READLINE
+    rl_readline_name = REPL_NAME;
+#endif
     createDirs(dirOf(historyFile));
 #ifndef READLINE
+#ifndef HAVE_HISTEDIT_H
     el_hist_size = 1000;
 #endif
+#endif
+#ifdef READLINE
     read_history(historyFile.c_str());
+#endif
+#ifdef HAVE_HISTEDIT_H
+    history(hist, &event, H_LOAD, historyFile.c_str());
+#endif
     curRepl = this;
 #ifndef READLINE
-    rl_set_complete_func(completionCallback);
+#ifndef HAVE_HISTEDIT_H
+    rl_set_complete_func(completionCallback); // TODO hook these up. probably requires glue
     rl_set_list_possib_func(listPossibleCallback);
+#endif
 #endif
 
     std::string input;
@@ -232,6 +262,15 @@ void NixRepl::mainLoop(const std::vector<std::string> & files)
     }
 }
 
+#ifdef HAVE_HISTEDIT_H
+
+char *NixRepl::histeditPrompt(EditLine *editline)
+{
+    return promptValue;
+}
+
+#endif
+
 
 bool NixRepl::getLine(string & input, const std::string &prompt)
 {
@@ -259,8 +298,22 @@ bool NixRepl::getLine(string & input, const std::string &prompt)
     };
 
     setupSignals();
+
+#ifdef HAVE_HISTEDIT_H
+    int count;
+    size_t promptSize = (prompt.length() + 1) * sizeof(char);
+    promptValue = (char *)malloc(promptSize);
+    strncpy(promptValue, prompt.c_str(), promptSize);
+    el_set(editline, EL_PROMPT, &NixRepl::histeditPrompt);
+    const char *s = el_gets(editline, &count);
+    free(promptValue);
+#else
     char * s = readline(prompt.c_str());
+#endif
+
+#ifndef HAVE_HISTEDIT_H
     Finally doFree([&]() { free(s); });
+#endif
     restoreSignals();
 
     if (g_signal_received) {

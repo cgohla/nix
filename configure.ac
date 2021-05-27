@@ -142,6 +142,21 @@ AX_BOOST_BASE([1.66], [CXXFLAGS="$BOOST_CPPFLAGS $CXXFLAGS"], [AC_MSG_ERROR([Nix
 # ends up with LDFLAGS being empty, so we set it afterwards.
 LDFLAGS="$BOOST_LDFLAGS $LDFLAGS"
 
+# This is required so we can tell configure to use the -mt variant of
+# boost_context. Unfortunately this test seems to be outdated and
+# fails, but configure proceeds anyway.
+# TODO actually use the configure option to link the library
+# AX_BOOST_CONTEXT # should we use this???
+
+# Perhaps this works better
+AC_ARG_VAR([WITH_BOOST_CONTEXT],[Variant for the Boost Context library.])
+[ if test -n $WITH_BOOST_CONTEXT ; then ]
+    AC_SUBST([BOOST_CONTEXT_LDFLAG],[$WITH_BOOST_CONTEXT])
+  else
+    AC_SUBST([BOOST_CONTEXT_LDFLAG],[-lboost_context])
+  fi
+
+
 # On some platforms, new-style atomics need a helper library
 AC_MSG_CHECKING(whether -latomic is needed)
 AC_LINK_IFELSE([AC_LANG_SOURCE([[
@@ -190,6 +205,9 @@ PKG_CHECK_MODULES([SQLITE3], [sqlite3 >= 3.6.19], [CXXFLAGS="$SQLITE3_CFLAGS $CX
 # Look for libcurl, a required dependency.
 PKG_CHECK_MODULES([LIBCURL], [libcurl], [CXXFLAGS="$LIBCURL_CFLAGS $CXXFLAGS"])
 
+# Look for histedit, native line editing library on OpenBSD
+# TODO the library is actually called editline as well. need to defined the cflags
+AC_CHECK_HEADERS([histedit.h], [], [
 # Look for editline, a required dependency.
 # The the libeditline.pc file was added only in libeditline >= 1.15.2,
 # see https://github.com/troglobit/editline/commit/0a8f2ef4203c3a4a4726b9dd1336869cd0da8607,
@@ -201,6 +219,8 @@ PKG_CHECK_MODULES([EDITLINE], [libeditline], [CXXFLAGS="$EDITLINE_CFLAGS $CXXFLA
   AC_SEARCH_LIBS([readline read_history], [editline], [],
     [AC_MSG_ERROR([Nix requires libeditline; it was not found via pkg-config, but via its header, but required functions do not work. Maybe it is too old? >= 1.14 is required.])])
 ])
+]) # end histedit test
+
 
 # Look for libsodium, an optional dependency.
 PKG_CHECK_MODULES([SODIUM], [libsodium], [CXXFLAGS="$SODIUM_CFLAGS $CXXFLAGS"])
@@ -219,12 +239,13 @@ LDFLAGS="-lz $LDFLAGS"
 PKG_CHECK_MODULES([LIBBROTLI], [libbrotlienc libbrotlidec], [CXXFLAGS="$LIBBROTLI_CFLAGS $CXXFLAGS"])
 
 # Look for libcpuid.
-if test "$machine_name" = "x86_64"; then
-  PKG_CHECK_MODULES([LIBCPUID], [libcpuid], [CXXFLAGS="$LIBCPUID_CFLAGS $CXXFLAGS"])
-  have_libcpuid=1
-  AC_DEFINE([HAVE_LIBCPUID], [1], [Use libcpuid])
-fi
-AC_SUBST(HAVE_LIBCPUID, [$have_libcpuid])
+dnl # TODO probably port this lib later
+dnl if test "$machine_name" = "x86_64"; then
+dnl   PKG_CHECK_MODULES([LIBCPUID], [libcpuid], [CXXFLAGS="$LIBCPUID_CFLAGS $CXXFLAGS"])
+dnl   have_libcpuid=1
+dnl   AC_DEFINE([HAVE_LIBCPUID], [1], [Use libcpuid])
+dnl fi
+dnl AC_SUBST(HAVE_LIBCPUID, [$have_libcpuid])
 
 
 # Look for libseccomp, required for Linux sandboxing.
@@ -256,10 +277,11 @@ AC_SUBST(ENABLE_S3, [$enable_s3])
 AC_LANG_POP(C++)
 
 if test -n "$enable_s3"; then
-  declare -a aws_version_tokens=($(printf '#include <aws/core/VersionConfig.h>\nAWS_SDK_VERSION_STRING' | $CPP $CPPFLAGS - | grep -v '^#.*' | sed 's/"//g' | tr '.' ' '))
-  AC_DEFINE_UNQUOTED([AWS_VERSION_MAJOR], ${aws_version_tokens@<:@0@:>@}, [Major version of aws-sdk-cpp.])
-  AC_DEFINE_UNQUOTED([AWS_VERSION_MINOR], ${aws_version_tokens@<:@1@:>@}, [Minor version of aws-sdk-cpp.])
-  AC_DEFINE_UNQUOTED([AWS_VERSION_PATCH], ${aws_version_tokens@<:@2@:>@}, [Patch version of aws-sdk-cpp.])
+  aws_version_tokens="$(printf '#include <aws/core/VersionConfig.h>\nAWS_SDK_VERSION_STRING' | $CPP $CPPFLAGS - | grep -v '^#.*' | sed 's/"//g' | tr '.' ' ')"
+  aws_major_version="$(awk -v ver="${aws_version_tokens}" '{print $1}')"
+  aws_minor_version="$(awk -v ver="${aws_version_tokens}" '{print $2}')"
+  AC_DEFINE_UNQUOTED([AWS_VERSION_MAJOR], ${aws_major_version}, [Major version of aws-sdk-cpp.])
+  AC_DEFINE_UNQUOTED([AWS_VERSION_MINOR], ${aws_minor_version}, [Minor version of aws-sdk-cpp.])
 fi
 
 
@@ -273,10 +295,14 @@ if test "$gc" = yes; then
   AC_DEFINE(HAVE_BOEHMGC, 1, [Whether to use the Boehm garbage collector.])
 fi
 
-
 # Look for gtest.
-PKG_CHECK_MODULES([GTEST], [gtest_main])
-
+if test $(uname -s) = OpenBSD ; then
+  dnl AC_CHECK_HEADERS([gtest.h], [
+    AC_SUBST([GTEST_LIBS], [$GTEST_LDFLAGS])
+  dnl ])
+else
+  PKG_CHECK_MODULES([GTEST], [gtest_main])
+fi
 
 # documentation generation switch
 AC_ARG_ENABLE(doc-gen, AC_HELP_STRING([--disable-doc-gen],
@@ -310,19 +336,43 @@ else
 fi
 AC_SUBST(tarFlags)
 
+# Do we have the JSON library?
+AC_ARG_VAR([nlohmann_json_include], [Path to the JSON includes])
+# ^ This is a bit strange because we don't actually need the output
+# variable. Perhaps there is a more idiomatic way to do this in
+# autoconf.
+AC_LANG_PUSH(C++)
+    [if test -n "$nlohmann_json_include" ; then
+	CXXFLAGS="-I$nlohmann_json_include $CXXFLAGS" ;
+    fi]
+    AC_CHECK_HEADERS([nlohmann/json_fwd.hpp],[
+	AC_SUBST([CXXFLAGS],[$CXXFLAGS])
+    ],[
+	AC_MSG_ERROR([We need the JSON library from https://github.com/nlohmann/json!])
+    ])
+AC_LANG_POP(C++)
+
+
 
 AC_ARG_WITH(sandbox-shell, AC_HELP_STRING([--with-sandbox-shell=PATH],
   [path of a statically-linked shell to use as /bin/sh in sandboxes]),
   sandbox_shell=$withval)
 AC_SUBST(sandbox_shell)
 
+AC_CHECK_HEADERS([sys/wait.h])
+
+PKG_CHECK_MODULES([LIBLOWDOWN], [lowdown >= 0.8.3], [CXXFLAGS="$LIBLOWDOWN_CFLAGS $CXXFLAGS"])
+
 # Expand all variables in config.status.
 test "$prefix" = NONE && prefix=$ac_default_prefix
 test "$exec_prefix" = NONE && exec_prefix='${prefix}'
 for name in $ac_subst_vars; do
-    declare $name="$(eval echo "${!name}")"
-    declare $name="$(eval echo "${!name}")"
-    declare $name="$(eval echo "${!name}")"
+    for _ in 1 2 3; do
+    if printf '%s' "${name}" | egrep '^[_[:alpha:]][_[:alnum:]]*$'
+    then
+        eval "${name}"="$(eval echo "\${${name}}")"
+    fi
+    done
 done
 
 rm -f Makefile.config

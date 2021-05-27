@@ -60,6 +60,10 @@
 
 #include <nlohmann/json.hpp>
 
+#ifdef HAVE_SYS_WAIT_H
+#include <sys/wait.h>
+#endif
+
 namespace nix {
 
 DerivationGoal::DerivationGoal(const StorePath & drvPath,
